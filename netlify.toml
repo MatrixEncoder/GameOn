@@ -6,6 +6,8 @@
 [build.environment]
   NODE_VERSION = "18"
   SECRETS_SCAN_ENABLED = "false"
+  NEXT_PUBLIC_API_URL = "https://gameon-backend-go1v.onrender.com"
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID = "473320900735-d3ljuqlhv8kaap9397a413ubjd4282v4.apps.googleusercontent.com"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
