@@ -7,8 +7,13 @@ import { config } from '../../config';
 import { AppError } from '../../middleware/error-handler';
 import { SignupDto, LoginDto } from './dto';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+
+function getResend() {
+    const key = process.env.RESEND_API_KEY;
+    if (!key) throw new AppError('Email service not configured (RESEND_API_KEY missing)', 500);
+    return new Resend(key);
+}
 
 export class AuthService {
     async signup(data: SignupDto) {
@@ -162,7 +167,7 @@ export class AuthService {
         const resetUrl = `${APP_URL}/auth?token=${token}&action=reset`;
 
         try {
-            await resend.emails.send({
+            await getResend().emails.send({
                 from: 'GameOn <onboarding@resend.dev>',
                 to: email,
                 subject: 'Reset your GameOn password',
