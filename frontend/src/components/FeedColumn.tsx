@@ -73,7 +73,7 @@ const FALLBACK_POSTS = [
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Post {
     id: string;
-    user: { id?: string; username: string };
+    user: { id?: string; username: string; displayName?: string; avatarUrl?: string };
     game: { id?: string; slug?: string; name: string };
     title: string;
     content: string;
@@ -85,14 +85,14 @@ interface Post {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function Avatar({ name, color = '#555', size = 40 }: { name: string; color?: string; size?: number }) {
+function Avatar({ name, image, color = '#555', size = 40 }: { name: string; image?: string; color?: string; size?: number }) {
     return (
         <div
             style={{
                 width: size,
                 height: size,
                 borderRadius: '50%',
-                background: `linear-gradient(135deg, ${color} 0%, ${color}99 100%)`,
+                background: image ? 'var(--bg-card)' : `linear-gradient(135deg, ${color} 0%, ${color}99 100%)`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -100,9 +100,11 @@ function Avatar({ name, color = '#555', size = 40 }: { name: string; color?: str
                 fontSize: size * 0.38,
                 color: '#fff',
                 flexShrink: 0,
+                overflow: 'hidden',
+                border: '1px solid var(--border)',
             }}
         >
-            {name[0].toUpperCase()}
+            {image ? <img src={image} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : name[0].toUpperCase()}
         </div>
     );
 }
@@ -147,6 +149,20 @@ function LoadingSpinner() {
     );
 }
 
+interface Comment {
+    id: string;
+    postId: string;
+    userId: string;
+    parentCommentId: string | null;
+    content: string;
+    score: number;
+    createdAt: string;
+    user: { id: string; username: string; displayName?: string; avatarUrl?: string };
+    userVote: number | null;
+    children: Comment[];
+    depth: number;
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function FeedColumn() {
     const router = useRouter();
@@ -158,9 +174,16 @@ export default function FeedColumn() {
     const [usingFallback, setUsingFallback] = useState(false);
     const [newPost, setNewPost] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [postError, setPostError] = useState('');
+    const [uploading, setUploading] = useState(false);
+    const [mediaUrl, setMediaUrl] = useState('');
+    const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
     const [commentText, setCommentText] = useState<Record<string, string>>({});
     const [showComments, setShowComments] = useState<Record<string, boolean>>({});
+    const [comments, setComments] = useState<Record<string, Comment[]>>({});
+    const [commentLoading, setCommentLoading] = useState<Record<string, boolean>>({});
     const sentinelRef = useRef<HTMLDivElement>(null);
+    const mediaInputRef = useRef<HTMLInputElement>(null);
     const user = getStoredUser();
 
     // ── Initial load ──────────────────────────────────────────────────────────
@@ -222,6 +245,7 @@ export default function FeedColumn() {
 
     async function handleVote(postId: string, voteType: number) {
         if (!user) { router.push('/auth'); return; }
+        if (usingFallback) return; // fallback posts can't be liked
         try {
             await api.post('/api/votes', { postId, voteType });
             setPosts((prev) =>
@@ -235,22 +259,74 @@ export default function FeedColumn() {
         } catch { /* ignore */ }
     }
 
+    async function toggleComments(postId: string) {
+        const next = !showComments[postId];
+        setShowComments((prev) => ({ ...prev, [postId]: next }));
+        if (next && !comments[postId]) {
+            setCommentLoading((prev) => ({ ...prev, [postId]: true }));
+            try {
+                const res = await api.get<any[]>(`/api/posts/${postId}/comments`);
+                setComments((prev) => ({ ...prev, [postId]: res }));
+            } catch {
+                setComments((prev) => ({ ...prev, [postId]: [] }));
+            } finally {
+                setCommentLoading((prev) => ({ ...prev, [postId]: false }));
+            }
+        }
+    }
+
+    const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'gameon_unsigned');
+
+        try {
+            const isVideo = file.type.startsWith('video/');
+            const endpoint = isVideo ? 'video' : 'image';
+            setMediaType(isVideo ? 'video' : 'image');
+
+            const res = await fetch(
+                `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/${endpoint}/upload`,
+                { method: 'POST', body: formData }
+            );
+            const data = await res.json();
+            if (data.secure_url) {
+                setMediaUrl(data.secure_url);
+            }
+        } catch (err) {
+            setPostError('Upload failed. Try again.');
+        } finally {
+            setUploading(false);
+        }
+    };
+
     async function handleCreatePost(e: React.FormEvent) {
         e.preventDefault();
         if (!user) { router.push('/auth'); return; }
-        if (!newPost.trim()) return;
+        if (!newPost.trim() && !mediaUrl) return;
         setSubmitting(true);
+        setPostError('');
         try {
-            // Post to default game (general); in MVP we pick first available game
             const games = await api.get<{ games: Array<{ slug: string }> }>('/api/games');
-            const slug = games.games[0]?.slug || 'general';
+            const slug = games.games[0]?.slug;
+            if (!slug) { setPostError('No games found. The database may not be seeded yet.'); return; }
             const created = await api.post<Post>(`/api/games/${slug}/posts`, {
                 title: newPost.slice(0, 80),
                 content: newPost,
+                image: mediaUrl || undefined,
             });
             setPosts((prev) => [created, ...prev]);
             setNewPost('');
-        } catch { /* ignore */ } finally {
+            setMediaUrl('');
+            setMediaType(null);
+            setUsingFallback(false);
+        } catch (err: any) {
+            setPostError(err.message || 'Failed to create post. Please try again.');
+        } finally {
             setSubmitting(false);
         }
     }
@@ -307,58 +383,81 @@ export default function FeedColumn() {
             </div>
 
             {/* ── Create Post ──────────────────────────────────────────────── */}
-            <form onSubmit={handleCreatePost} className="card fade-in" style={{ animationDelay: '0.06s', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <form onSubmit={handleCreatePost} className="card fade-in" style={{ animationDelay: '0.06s', flexShrink: 0, gap: 12 }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                     <Avatar
-                        name={user?.username || '?'}
-                        color={user ? '#f5d000' : '#555'}
-                        size={38}
+                        name={user?.displayName || user?.username || '?'}
+                        image={user?.avatarUrl}
+                        color="#f5d000"
+                        size={42}
                     />
-                    <input
+                    <textarea
                         value={newPost}
                         onChange={(e) => setNewPost(e.target.value)}
-                        placeholder={user ? 'Share what\'s happening in gaming…' : 'Log in to post…'}
+                        placeholder={user ? "What's on your mind, gamer?" : "Log in to share your clips..."}
                         disabled={!user}
                         style={{
                             flex: 1,
-                            background: 'var(--bg-input)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 10,
-                            padding: '10px 14px',
-                            color: 'var(--text-secondary)',
-                            fontSize: 13,
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-primary)',
+                            fontSize: 15,
                             outline: 'none',
-                            cursor: user ? 'text' : 'not-allowed',
+                            resize: 'none',
+                            minHeight: 60,
+                            padding: '8px 0',
                         }}
                     />
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                    {[
-                        { icon: <ImageIcon />, label: 'Photo' },
-                        { icon: <VideoIcon />, label: 'Video' },
-                        { icon: <PollIcon />, label: 'Poll' },
-                        { icon: <CalendarIcon />, label: 'Schedule' },
-                    ].map((action) => (
+
+                {mediaUrl && (
+                    <div style={{ position: 'relative', width: '100%', borderRadius: 12, overflow: 'hidden', marginBottom: 4 }}>
+                        {mediaType === 'video' ? (
+                            <video src={mediaUrl} controls style={{ width: '100%', maxHeight: 300, background: '#000' }} />
+                        ) : (
+                            <img src={mediaUrl} alt="Preview" style={{ width: '100%', maxHeight: 300, objectFit: 'cover' }} />
+                        )}
                         <button
-                            key={action.label}
                             type="button"
-                            className="btn-outline"
-                            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px' }}
+                            onClick={() => { setMediaUrl(''); setMediaType(null); }}
+                            style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer', fontSize: 14 }}
+                        >✕</button>
+                    </div>
+                )}
+
+                {postError && (
+                    <div style={{ background: 'rgba(255,80,80,0.1)', border: '1px solid rgba(255,80,80,0.3)', borderRadius: 8, padding: '8px 12px', color: '#ff6b6b', fontSize: 12 }}>
+                        {postError}
+                    </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                    <input type="file" ref={mediaInputRef} onChange={handleMediaUpload} style={{ display: 'none' }} accept="image/*,video/*" />
+                    {[
+                        { icon: <ImageIcon />, label: uploading && mediaType !== 'video' ? 'Uploading...' : 'Photo', onClick: () => mediaInputRef.current?.click() },
+                        { icon: <VideoIcon />, label: uploading && mediaType === 'video' ? 'Uploading...' : 'Video', onClick: () => mediaInputRef.current?.click() },
+                        { icon: <SmileIcon />, label: 'Feeling' },
+                    ].map((btn, i) => (
+                        <button
+                            key={i}
+                            type="button"
+                            className="btn-outline-small"
+                            onClick={btn.onClick}
+                            disabled={uploading || !user}
+                            style={{ gap: 6, fontSize: 12, padding: '6px 12px', opacity: !user ? 0.5 : 1 }}
                         >
-                            <span>{action.icon}</span>
-                            <span style={{ fontSize: 12 }}>{action.label}</span>
+                            {btn.icon} {btn.label}
                         </button>
                     ))}
-                    {newPost.trim() && user && (
-                        <button
-                            type="submit"
-                            disabled={submitting}
-                            className="btn-yellow"
-                            style={{ marginLeft: 'auto', padding: '6px 18px', fontSize: 12, fontWeight: 600 }}
-                        >
-                            {submitting ? '...' : 'Post'}
-                        </button>
-                    )}
+                    <div style={{ flex: 1 }} />
+                    <button
+                        type="submit"
+                        className="btn-yellow yellow-glow"
+                        disabled={submitting || uploading || (!newPost.trim() && !mediaUrl)}
+                        style={{ padding: '7px 24px', opacity: submitting || uploading ? 0.6 : 1, fontSize: 13, fontWeight: 700 }}
+                    >
+                        {submitting ? 'Posting...' : 'Post it!'}
+                    </button>
                 </div>
             </form>
 
@@ -379,10 +478,15 @@ export default function FeedColumn() {
                         {/* Header */}
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <Avatar name={post.user.username} color={['#4facfe', '#ff6b35', '#f5a623', '#20c997', '#e83e8c'][idx % 5]} size={42} />
+                                <Avatar
+                                    name={post.user.displayName || post.user.username}
+                                    image={post.user.avatarUrl}
+                                    color={['#4facfe', '#ff6b35', '#f5a623', '#20c997', '#e83e8c'][idx % 5]}
+                                    size={42}
+                                />
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <span style={{ fontWeight: 700, fontSize: 14 }}>{post.user.username}</span>
+                                        <span style={{ fontWeight: 700, fontSize: 14 }}>{post.user.displayName || post.user.username}</span>
                                         <span
                                             style={{
                                                 fontSize: 11,
@@ -410,26 +514,23 @@ export default function FeedColumn() {
                         <p style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, color: 'var(--text-primary)' }}>{post.title}</p>
                         <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>{post.content}</p>
 
-                        {/* Post image (from seed or fallback) */}
+                        {/* Post image (from seed or fallback) or video */}
                         {post.image && (
                             <div
                                 style={{
                                     width: '100%',
-                                    height: 220,
                                     borderRadius: 12,
                                     overflow: 'hidden',
                                     marginBottom: 12,
-                                    position: 'relative',
+                                    background: 'var(--bg-card)',
                                 }}
                             >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={post.image} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                <button
-                                    className="btn-yellow yellow-glow"
-                                    style={{ position: 'absolute', bottom: 14, right: 14, padding: '7px 20px', fontSize: 13 }}
-                                >
-                                    Join Game
-                                </button>
+                                {post.image.includes('/video/upload') ? (
+                                    <video src={post.image} controls style={{ width: '100%', maxHeight: 400 }} />
+                                ) : (
+                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                    <img src={post.image} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                )}
                             </div>
                         )}
 
@@ -454,8 +555,8 @@ export default function FeedColumn() {
                                 <HeartIcon filled={post.userVote === 1} /> {post.score}
                             </button>
                             <button
-                                onClick={() => setShowComments((prev) => ({ ...prev, [post.id]: !prev[post.id] }))}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
+                                onClick={() => toggleComments(post.id)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: showComments[post.id] ? 'var(--accent-yellow)' : 'var(--text-muted)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}
                             >
                                 <MessageIcon /> {post._count.comments}
                             </button>
@@ -466,10 +567,59 @@ export default function FeedColumn() {
                             </button>
                         </div>
 
+                        {/* Comments Section */}
+                        {showComments[post.id] && (
+                            <div style={{ marginTop: 12, marginBottom: 4 }}>
+                                {commentLoading[post.id] ? (
+                                    <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '4px 0' }}>Loading comments…</div>
+                                ) : (comments[post.id] || []).length === 0 ? (
+                                    <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '4px 0' }}>No comments yet. Be the first!</div>
+                                ) : (
+                                    (comments[post.id] || []).map((c: any) => (
+                                        <div key={c.id} style={{ display: 'flex', gap: 8, padding: '8px 0', borderTop: '1px solid var(--border)' }}>
+                                            <Avatar
+                                                name={c.user.displayName || c.user.username}
+                                                image={c.user.avatarUrl}
+                                                color="#4facfe"
+                                                size={28}
+                                            />
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 2 }}>
+                                                    <span style={{ fontWeight: 700, fontSize: 12 }}>{c.user.displayName || c.user.username}</span>
+                                                    <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>{timeAgo(c.createdAt)}</span>
+                                                </div>
+                                                <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>{c.content}</p>
+                                                {c.children?.map((child: any) => (
+                                                    <div key={child.id} style={{ display: 'flex', gap: 8, marginTop: 8, paddingLeft: 16, borderLeft: '2px solid var(--border)' }}>
+                                                        <Avatar
+                                                            name={child.user.displayName || child.user.username}
+                                                            image={child.user.avatarUrl}
+                                                            color="#20c997"
+                                                            size={22}
+                                                        />
+                                                        <div>
+                                                            <span style={{ fontWeight: 700, fontSize: 11 }}>{child.user.displayName || child.user.username}</span>
+                                                            <span style={{ color: 'var(--text-muted)', fontSize: 10, marginLeft: 6 }}>{timeAgo(child.createdAt)}</span>
+                                                            <p style={{ color: 'var(--text-secondary)', fontSize: 12, margin: '2px 0 0' }}>{child.content}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+
                         {/* Comment Box */}
                         <hr className="sep" style={{ margin: '10px 0' }} />
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Avatar name={user?.username || '?'} color="#f5d000" size={30} />
+                            <Avatar
+                                name={user?.displayName || user?.username || '?'}
+                                image={user?.avatarUrl}
+                                color="#f5d000"
+                                size={30}
+                            />
                             <input
                                 value={commentText[post.id] || ''}
                                 onChange={(e) => setCommentText((prev) => ({ ...prev, [post.id]: e.target.value }))}
@@ -477,11 +627,12 @@ export default function FeedColumn() {
                                     if (e.key === 'Enter' && commentText[post.id]?.trim()) {
                                         if (!user) { router.push('/auth'); return; }
                                         try {
-                                            await api.post(`/api/posts/${post.id}/comments`, { content: commentText[post.id] });
+                                            const newComment = await api.post<any>(`/api/posts/${post.id}/comments`, { content: commentText[post.id] });
                                             setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, _count: { comments: p._count.comments + 1 } } : p));
+                                            setComments((prev) => ({ ...prev, [post.id]: [newComment, ...(prev[post.id] || [])] }));
+                                            setShowComments((prev) => ({ ...prev, [post.id]: true }));
                                         } catch { /* ignore */ }
                                         setCommentText((prev) => ({ ...prev, [post.id]: '' }));
-                                        setShowComments((prev) => ({ ...prev, [post.id]: true }));
                                     }
                                 }}
                                 placeholder={user ? 'Write a comment and press Enter…' : 'Log in to comment…'}

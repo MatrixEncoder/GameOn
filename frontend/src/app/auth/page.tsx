@@ -1,6 +1,6 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { Suspense, useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api, storeAuth } from '../../lib/api';
 
 // ── Google icon ───────────────────────────────────────────────────────────────
@@ -40,8 +40,9 @@ declare global {
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 
-export default function AuthPage() {
+function AuthPageInner() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [tab, setTab] = useState<'login' | 'register'>('login');
     const [subState, setSubState] = useState<'default' | 'forgot' | 'reset'>('default');
     const [resetToken, setResetToken] = useState('');
@@ -50,6 +51,16 @@ export default function AuthPage() {
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
+
+    // Auto-open reset form when coming from email link
+    useEffect(() => {
+        const token = searchParams.get('token');
+        const action = searchParams.get('action');
+        if (token && action === 'reset') {
+            setResetToken(token);
+            setSubState('reset');
+        }
+    }, [searchParams]);
 
     // Load Google Identity Services SDK
     useEffect(() => {
@@ -322,5 +333,13 @@ export default function AuthPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function AuthPage() {
+    return (
+        <Suspense fallback={null}>
+            <AuthPageInner />
+        </Suspense>
     );
 }

@@ -1,5 +1,6 @@
-'use client';
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { getStoredUser, api, storeAuth, StoredUser } from '@/lib/api';
+import { useRouter } from 'next/navigation';
 
 const ControllerIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6 12h4" /><path d="M8 10v4" /><circle cx="15" cy="13" r="1" /><circle cx="18" cy="11" r="1" /></svg>;
 const CrosshairIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="22" x2="18" y1="12" y2="12" /><line x1="6" x2="2" y1="12" y2="12" /><line x1="12" x2="12" y1="6" y2="2" /><line x1="12" x2="12" y1="22" y2="18" /></svg>;
@@ -22,6 +23,71 @@ const games = [
 const skills = ['FPS', 'Strategy', 'RPG', 'Mobile', 'Esports', 'Modding'];
 
 export default function LeftSidebar() {
+    const router = useRouter();
+    const [user, setUser] = useState<StoredUser | null>(null);
+    const [showEdit, setShowEdit] = useState(false);
+    const [editData, setEditData] = useState({ displayName: '', avatarUrl: '' });
+    const [saving, setSaving] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        setUser(getStoredUser());
+    }, []);
+
+    const handleEditProfile = () => {
+        if (!user) {
+            router.push('/auth');
+            return;
+        }
+        setEditData({
+            displayName: user.displayName || '',
+            avatarUrl: user.avatarUrl || '',
+        });
+        setShowEdit(true);
+    };
+
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'gameon_unsigned');
+
+        try {
+            const res = await fetch(
+                `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+                { method: 'POST', body: formData }
+            );
+            const data = await res.json();
+            if (data.secure_url) {
+                setEditData(prev => ({ ...prev, avatarUrl: data.secure_url }));
+            }
+        } catch (err) {
+            console.error('Upload failed:', err);
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        setSaving(true);
+        try {
+            const updated = await api.put<StoredUser>('/api/users/me', editData);
+            const token = localStorage.getItem('gameon_token');
+            if (token) {
+                storeAuth(token, updated);
+                setUser(updated);
+            }
+            setShowEdit(false);
+        } catch (err) {
+            console.error('Update failed:', err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const initial = user?.displayName?.[0] || user?.username?.[0] || '?';
+    const avatar = user?.avatarUrl || 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=400&auto=format';
+
     return (
         <aside
             style={{
@@ -95,21 +161,33 @@ export default function LeftSidebar() {
                 {/* Avatar + stats */}
                 <div style={{ padding: '0 14px 14px', width: '100%' }}>
                     {/* Avatar overlapping cover */}
-                    <img
-                        src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=400&auto=format"
-                        alt="GamerX"
+                    <div
+                        onClick={() => fileInputRef.current?.click()}
                         style={{
                             marginTop: -22,
                             width: 54,
                             height: 54,
                             borderRadius: '50%',
-                            objectFit: 'cover',
-                            objectPosition: 'center 20%',
+                            background: 'var(--bg-card)',
                             border: '3px solid var(--bg-surface)',
-                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 24,
+                            fontWeight: 700,
+                            color: 'var(--accent-yellow)',
+                            cursor: 'pointer',
+                            overflow: 'hidden',
+                            position: 'relative',
                             marginBottom: 8,
                         }}
-                    />
+                    >
+                        {user?.avatarUrl ? (
+                            <img src={user.avatarUrl} alt={user.username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                            initial.toUpperCase()
+                        )}
+                    </div>
 
                     {/* Follower counts */}
                     <div style={{ display: 'flex', gap: 16, marginBottom: 10 }}>
@@ -123,16 +201,23 @@ export default function LeftSidebar() {
                         </div>
                     </div>
 
-                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>GamerX Pro</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 8 }}>@gamerx</div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 12, lineHeight: 1.6 }}>
-                        🎮 Hardcore gamer. Open to collabs & tournaments. ⚡
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>
+                        {user?.displayName || user?.username || 'Gamer'}
                     </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 8 }}>
+                        @{user?.username || 'guest'}
+                    </div>
+                    {!user && (
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 12, lineHeight: 1.6 }}>
+                            Login to join communities and post your clips!
+                        </div>
+                    )}
                     <button
                         className="btn-outline"
                         style={{ width: '100%', justifyContent: 'center', display: 'flex' }}
+                        onClick={handleEditProfile}
                     >
-                        My Profile
+                        {user ? 'Edit Profile' : 'Login'}
                     </button>
                 </div>
             </div>
@@ -215,6 +300,49 @@ export default function LeftSidebar() {
                     ))}
                 </div>
             </div>
+            {/* Edit Profile Modal */}
+            {showEdit && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', padding: 20 }}>
+                    <div className="card" style={{ width: '100%', maxWidth: 400, gap: 20, boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Edit Profile</h2>
+                            <button onClick={() => setShowEdit(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20 }}>✕</button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                            <div
+                                onClick={() => fileInputRef.current?.click()}
+                                style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--bg-input)', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', cursor: 'pointer' }}
+                            >
+                                {editData.avatarUrl ? (
+                                    <img src={editData.avatarUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                    <div style={{ textAlign: 'center', fontSize: 10, color: 'var(--text-muted)' }}>Click to upload</div>
+                                )}
+                            </div>
+                            <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} style={{ display: 'none' }} accept="image/*" />
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Recommended: 400x400 JPG/PNG</span>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Display Name</label>
+                            <input
+                                value={editData.displayName}
+                                onChange={e => setEditData(prev => ({ ...prev, displayName: e.target.value }))}
+                                placeholder="E.g. Ninja Gamer"
+                                style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', color: 'var(--text-primary)', outline: 'none' }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                            <button className="btn-outline" style={{ flex: 1 }} onClick={() => setShowEdit(false)}>Cancel</button>
+                            <button className="btn-yellow" style={{ flex: 1 }} onClick={handleSaveProfile} disabled={saving}>
+                                {saving ? 'Saving...' : 'Save Changes'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </aside>
     );
 }

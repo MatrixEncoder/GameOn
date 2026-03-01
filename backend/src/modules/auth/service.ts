@@ -1,10 +1,14 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
+import { Resend } from 'resend';
 import prisma from '../../config/db';
 import { config } from '../../config';
 import { AppError } from '../../middleware/error-handler';
 import { SignupDto, LoginDto } from './dto';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+const APP_URL = process.env.APP_URL || 'http://localhost:3000';
 
 export class AuthService {
     async signup(data: SignupDto) {
@@ -155,9 +159,31 @@ export class AuthService {
             },
         });
 
-        // In a real app, send email here. For now, we return token for verification.
-        console.log(`🔑 Reset token for ${email}: ${token}`);
-        return { message: 'If an account exists with that email, a reset link will be sent.', debugToken: token };
+        const resetUrl = `${APP_URL}/auth?token=${token}&action=reset`;
+
+        try {
+            await resend.emails.send({
+                from: 'GameOn <onboarding@resend.dev>',
+                to: email,
+                subject: 'Reset your GameOn password',
+                html: `
+                    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#111;color:#eee;border-radius:12px">
+                        <h2 style="color:#f5c518;margin-top:0">🎮 GameOn — Password Reset</h2>
+                        <p>We received a request to reset your password. Click the button below to choose a new one.</p>
+                        <p style="text-align:center;margin:32px 0">
+                            <a href="${resetUrl}" style="background:#f5c518;color:#111;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px">Reset Password</a>
+                        </p>
+                        <p style="color:#888;font-size:12px">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
+                        <p style="color:#888;font-size:12px">Or copy this link: <a href="${resetUrl}" style="color:#f5c518">${resetUrl}</a></p>
+                    </div>
+                `,
+            });
+        } catch (emailErr) {
+            console.error('Failed to send reset email:', emailErr);
+            // Don't throw — still return success to avoid leaking user existence
+        }
+
+        return { message: 'If an account exists with that email, a reset link will be sent.' };
     }
 
     async resetPassword(token: string, newPassword: string) {

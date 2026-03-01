@@ -36,7 +36,15 @@ export function getStoredToken(): string | null {
     return localStorage.getItem('gameon_token');
 }
 
-export function getStoredUser(): { id: string; username: string; email: string } | null {
+export interface StoredUser {
+    id: string;
+    username: string;
+    email: string;
+    displayName?: string;
+    avatarUrl?: string;
+}
+
+export function getStoredUser(): StoredUser | null {
     if (typeof window === 'undefined') return null;
     try {
         const raw = localStorage.getItem('gameon_user');
@@ -46,7 +54,7 @@ export function getStoredUser(): { id: string; username: string; email: string }
     }
 }
 
-export function storeAuth(token: string, user: { id: string; username: string; email: string }) {
+export function storeAuth(token: string, user: StoredUser) {
     localStorage.setItem('gameon_token', token);
     localStorage.setItem('gameon_user', JSON.stringify(user));
 }
