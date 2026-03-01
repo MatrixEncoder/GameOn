@@ -45,6 +45,7 @@ export default function LeftSidebar() {
                     gap: 0,
                     padding: 0,
                     overflow: 'hidden',
+                    flexShrink: 0,
                 }}
             >
                 {/* Cover with concentric circles */}
@@ -95,7 +96,7 @@ export default function LeftSidebar() {
                 <div style={{ padding: '0 14px 14px', width: '100%' }}>
                     {/* Avatar overlapping cover */}
                     <img
-                        src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=150&auto=format&fit=crop"
+                        src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=400&auto=format"
                         alt="GamerX"
                         style={{
                             marginTop: -22,
@@ -103,6 +104,7 @@ export default function LeftSidebar() {
                             height: 54,
                             borderRadius: '50%',
                             objectFit: 'cover',
+                            objectPosition: 'center 20%',
                             border: '3px solid var(--bg-surface)',
                             flexShrink: 0,
                             marginBottom: 8,

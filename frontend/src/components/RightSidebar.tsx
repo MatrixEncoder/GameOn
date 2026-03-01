@@ -5,7 +5,7 @@ const activities = [
     {
         id: 1,
         user: 'Vikram A.',
-        image: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=150&auto=format&fit=crop',
+        image: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=200&auto=format',
         color: '#f5a623',
         action: 'subscribed to you',
         time: '3 min ago',
@@ -18,7 +18,7 @@ const activities = [
     {
         id: 2,
         user: 'Neha K.',
-        image: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=150&auto=format&fit=crop',
+        image: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=200&auto=format',
         color: '#e83e8c',
         action: 'bought your clip',
         time: '6 hrs ago',
@@ -31,7 +31,7 @@ const activities = [
     {
         id: 3,
         user: 'Rahul A.',
-        image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop',
+        image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format',
         color: '#6610f2',
         action: 'sent you a tip',
         time: '7 hrs ago',
@@ -44,7 +44,7 @@ const activities = [
     {
         id: 4,
         user: 'Priya K.',
-        image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop',
+        image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format',
         color: '#20c997',
         action: 'sent you a job request',
         time: '1 hr ago',
@@ -57,7 +57,7 @@ const activities = [
     {
         id: 5,
         user: 'Team Alpha',
-        image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=150&auto=format&fit=crop',
+        image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=200&auto=format',
         color: '#ff6b35',
         action: 'group activity',
         time: '12 hrs ago',
@@ -117,7 +117,7 @@ export default function RightSidebar() {
                                             color: '#fff',
                                             backgroundImage: a.image ? `url(${a.image})` : 'none',
                                             backgroundSize: 'cover',
-                                            backgroundPosition: 'center',
+                                            backgroundPosition: 'center 20%',
                                             border: '1px solid var(--border)',
                                         }}
                                     >

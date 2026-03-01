@@ -22,12 +22,12 @@ const MoreIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="non
 
 // ── Static stories (avatar showcase) ─────────────────────────────────────────
 const stories = [
-    { name: 'Karan', image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=150&auto=format&fit=crop', color: '#f5a623' },
-    { name: 'Priya', image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150&auto=format&fit=crop', color: '#e83e8c' },
-    { name: 'Rahul', image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop', color: '#6c757d' },
-    { name: 'Ananya', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=150&auto=format&fit=crop', color: '#20c997' },
-    { name: 'Vikram', image: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=150&auto=format&fit=crop', color: '#ff6b35' },
-    { name: 'Neha', image: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=150&auto=format&fit=crop', color: '#6610f2' },
+    { name: 'Karan', image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=400&auto=format', color: '#f5a623' },
+    { name: 'Priya', image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format', color: '#e83e8c' },
+    { name: 'Rahul', image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format', color: '#6c757d' },
+    { name: 'Ananya', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=400&auto=format', color: '#20c997' },
+    { name: 'Vikram', image: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=400&auto=format', color: '#ff6b35' },
+    { name: 'Neha', image: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=400&auto=format', color: '#6610f2' },
 ];
 
 // ── Fallback posts if backend is not up yet ───────────────────────────────────
@@ -271,7 +271,7 @@ export default function FeedColumn() {
             {/* ── Stories Row ─────────────────────────────────────────────── */}
             <div
                 className="card fade-in"
-                style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 18, overflowX: 'auto' }}
+                style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 18, overflowX: 'auto', flexShrink: 0 }}
             >
                 {stories.map((s, i) => (
                     <div
@@ -294,7 +294,7 @@ export default function FeedColumn() {
                                 borderRadius: 14,
                                 backgroundImage: `url(${s.image})`,
                                 backgroundSize: 'cover',
-                                backgroundPosition: 'top center',
+                                backgroundPosition: 'center 20%',
                                 border: i === 0 ? '2px solid var(--accent-yellow)' : '2px solid var(--border)',
                                 flexShrink: 0,
                             }}
@@ -307,7 +307,7 @@ export default function FeedColumn() {
             </div>
 
             {/* ── Create Post ──────────────────────────────────────────────── */}
-            <form onSubmit={handleCreatePost} className="card fade-in" style={{ animationDelay: '0.06s' }}>
+            <form onSubmit={handleCreatePost} className="card fade-in" style={{ animationDelay: '0.06s', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                     <Avatar
                         name={user?.username || '?'}
