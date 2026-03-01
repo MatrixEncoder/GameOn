@@ -11,6 +11,8 @@ const controller = new AuthController();
 router.post('/signup', authLimiter, validate(signupDto), controller.signup);
 router.post('/login', authLimiter, validate(loginDto), controller.login);
 router.post('/oauth', authLimiter, controller.oauthLogin);
+router.post('/forgot-password', authLimiter, controller.forgotPassword);
+router.post('/reset-password', authLimiter, controller.resetPassword);
 router.get('/me', authenticate, controller.getMe);
 
 export default router;

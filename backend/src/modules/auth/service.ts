@@ -16,7 +16,7 @@ export class AuthService {
 
         if (existingUser) {
             if (existingUser.email === data.email) {
-                throw new AppError('Email already in use', 409);
+                throw new AppError('Email already exists. Please log in or use Forgot Password.', 409);
             }
             throw new AppError('Username already taken', 409);
         }
@@ -116,6 +116,55 @@ export class AuthService {
             user: { id: user.id, username: user.username, email: user.email },
             token,
         };
+    }
+
+    async forgotPassword(email: string) {
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user) {
+            // Security: don't reveal if user exists
+            return { message: 'If an account exists with that email, a reset link will be sent.' };
+        }
+
+        const token = randomBytes(32).toString('hex');
+        const expires = new Date(Date.now() + 3600000); // 1 hour
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                resetPasswordToken: token,
+                resetPasswordExpires: expires,
+            },
+        });
+
+        // In a real app, send email here. For now, we return token for verification.
+        console.log(`🔑 Reset token for ${email}: ${token}`);
+        return { message: 'If an account exists with that email, a reset link will be sent.', debugToken: token };
+    }
+
+    async resetPassword(token: string, newPassword: string) {
+        const user = await prisma.user.findFirst({
+            where: {
+                resetPasswordToken: token,
+                resetPasswordExpires: { gt: new Date() },
+            },
+        });
+
+        if (!user) {
+            throw new AppError('Invalid or expired reset token', 400);
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 12);
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                passwordHash,
+                resetPasswordToken: null,
+                resetPasswordExpires: null,
+            },
+        });
+
+        return { message: 'Password has been reset successfully' };
     }
 
     async getMe(userId: string) {

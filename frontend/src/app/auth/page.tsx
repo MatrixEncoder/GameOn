@@ -43,10 +43,13 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 export default function AuthPage() {
     const router = useRouter();
     const [tab, setTab] = useState<'login' | 'register'>('login');
+    const [subState, setSubState] = useState<'default' | 'forgot' | 'reset'>('default');
+    const [resetToken, setResetToken] = useState('');
     const [form, setForm] = useState({ username: '', email: '', password: '' });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
+    const [successMsg, setSuccessMsg] = useState('');
 
     // Load Google Identity Services SDK
     useEffect(() => {
@@ -62,6 +65,7 @@ export default function AuthPage() {
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
         setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
         setError('');
+        setSuccessMsg('');
     }
 
     // ── Google OAuth ──────────────────────────────────────────────────────────
@@ -88,8 +92,8 @@ export default function AuthPage() {
                     storeAuth(res.token, res.user);
                     router.push('/');
                     router.refresh();
-                } catch (err: unknown) {
-                    setError(err instanceof Error ? err.message : 'Google sign-in failed. Try again.');
+                } catch (err: any) {
+                    setError(err.message || 'Google sign-in failed. Try again.');
                 } finally {
                     setGoogleLoading(false);
                 }
@@ -103,24 +107,40 @@ export default function AuthPage() {
         e.preventDefault();
         setLoading(true);
         setError('');
+        setSuccessMsg('');
         try {
-            if (tab === 'login') {
+            if (subState === 'forgot') {
+                const res = await api.post<{ message: string; debugToken?: string }>('/api/auth/forgot-password', { email: form.email });
+                setSuccessMsg(res.message);
+                if (res.debugToken) {
+                    // For development convenience, we pre-fill the token if returned
+                    setResetToken(res.debugToken);
+                    setSubState('reset');
+                }
+            } else if (subState === 'reset') {
+                await api.post('/api/auth/reset-password', { token: resetToken, password: form.password });
+                setSuccessMsg('Password reset successful! You can now log in.');
+                setSubState('default');
+                setTab('login');
+            } else if (tab === 'login') {
                 const res = await api.post<{ token: string; user: { id: string; username: string; email: string } }>(
                     '/api/auth/login',
                     { email: form.email, password: form.password }
                 );
                 storeAuth(res.token, res.user);
+                router.push('/');
+                router.refresh();
             } else {
                 const res = await api.post<{ token: string; user: { id: string; username: string; email: string } }>(
                     '/api/auth/signup',
                     { username: form.username, email: form.email, password: form.password }
                 );
                 storeAuth(res.token, res.user);
+                router.push('/');
+                router.refresh();
             }
-            router.push('/');
-            router.refresh();
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Something went wrong');
+        } catch (err: any) {
+            setError(err.message || 'Something went wrong');
         } finally {
             setLoading(false);
         }
@@ -158,74 +178,104 @@ export default function AuthPage() {
                         fontSize: 26, fontWeight: 800, color: 'var(--accent-yellow)', marginBottom: 12,
                     }}>G</div>
                     <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>GameOn</h1>
-                    <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>Join the gaming conversation</p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>
+                        {subState === 'forgot' ? 'Reset your password' : subState === 'reset' ? 'Choose a new password' : 'Join the gaming conversation'}
+                    </p>
                 </div>
 
-                {/* Tabs */}
-                <div style={{ display: 'flex', background: 'var(--bg-card)', borderRadius: 10, padding: 4, marginBottom: 20 }}>
-                    {(['login', 'register'] as const).map((t) => (
-                        <button key={t} onClick={() => { setTab(t); setError(''); }}
+                {subState === 'default' && (
+                    <>
+                        {/* Tabs */}
+                        <div style={{ display: 'flex', background: 'var(--bg-card)', borderRadius: 10, padding: 4, marginBottom: 20 }}>
+                            {(['login', 'register'] as const).map((t) => (
+                                <button key={t} onClick={() => { setTab(t); setError(''); setSuccessMsg(''); }}
+                                    style={{
+                                        flex: 1, padding: '8px 0', borderRadius: 8, border: 'none',
+                                        background: tab === t ? 'var(--accent-yellow)' : 'transparent',
+                                        color: tab === t ? '#111' : 'var(--text-muted)',
+                                        fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s',
+                                    }}>
+                                    {t === 'login' ? 'Log In' : 'Sign Up'}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Google Button */}
+                        <button
+                            onClick={handleGoogleLogin}
+                            disabled={googleLoading}
                             style={{
-                                flex: 1, padding: '8px 0', borderRadius: 8, border: 'none',
-                                background: tab === t ? 'var(--accent-yellow)' : 'transparent',
-                                color: tab === t ? '#111' : 'var(--text-muted)',
-                                fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s',
-                            }}>
-                            {t === 'login' ? 'Log In' : 'Sign Up'}
+                                width: '100%',
+                                padding: '12px 0',
+                                borderRadius: 10,
+                                border: '1px solid var(--border)',
+                                background: 'var(--bg-card)',
+                                color: 'var(--text-primary)',
+                                fontWeight: 600,
+                                fontSize: 14,
+                                cursor: googleLoading ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 10,
+                                opacity: googleLoading ? 0.7 : 1,
+                                transition: 'all 0.2s',
+                                marginBottom: 16,
+                            }}
+                            onMouseEnter={e => { if (!googleLoading) e.currentTarget.style.borderColor = '#4285F4'; }}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+                        >
+                            <GoogleIcon />
+                            {googleLoading ? 'Signing in…' : 'Continue with Google'}
                         </button>
-                    ))}
-                </div>
 
-                {/* Google Button */}
-                <button
-                    onClick={handleGoogleLogin}
-                    disabled={googleLoading}
-                    style={{
-                        width: '100%',
-                        padding: '12px 0',
-                        borderRadius: 10,
-                        border: '1px solid var(--border)',
-                        background: 'var(--bg-card)',
-                        color: 'var(--text-primary)',
-                        fontWeight: 600,
-                        fontSize: 14,
-                        cursor: googleLoading ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 10,
-                        opacity: googleLoading ? 0.7 : 1,
-                        transition: 'all 0.2s',
-                        marginBottom: 16,
-                    }}
-                    onMouseEnter={e => { if (!googleLoading) e.currentTarget.style.borderColor = '#4285F4'; }}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                >
-                    <GoogleIcon />
-                    {googleLoading ? 'Signing in…' : 'Continue with Google'}
-                </button>
-
-                <Divider />
+                        <Divider />
+                    </>
+                )}
 
                 {/* Email form */}
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    {tab === 'register' && (
+                    {subState === 'reset' && (
+                        <div>
+                            <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Reset Token</label>
+                            <input value={resetToken} onChange={e => setResetToken(e.target.value)}
+                                placeholder="Paste token from email" required style={inputStyle} />
+                        </div>
+                    )}
+
+                    {tab === 'register' && subState === 'default' && (
                         <div>
                             <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Username</label>
                             <input name="username" value={form.username} onChange={handleChange}
                                 placeholder="e.g. GamerX42" required style={inputStyle} />
                         </div>
                     )}
-                    <div>
-                        <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Email</label>
-                        <input name="email" type="email" value={form.email} onChange={handleChange}
-                            placeholder="you@example.com" required style={inputStyle} />
-                    </div>
-                    <div>
-                        <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Password</label>
-                        <input name="password" type="password" value={form.password} onChange={handleChange}
-                            placeholder="Min. 8 characters" required minLength={8} style={inputStyle} />
-                    </div>
+
+                    {subState !== 'reset' && (
+                        <div>
+                            <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Email</label>
+                            <input name="email" type="email" value={form.email} onChange={handleChange}
+                                placeholder="you@example.com" required style={inputStyle} />
+                        </div>
+                    )}
+
+                    {subState !== 'forgot' && (
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                    {subState === 'reset' ? 'New Password' : 'Password'}
+                                </label>
+                                {tab === 'login' && subState === 'default' && (
+                                    <button type="button" onClick={() => { setSubState('forgot'); setError(''); }}
+                                        style={{ background: 'none', border: 'none', color: 'var(--accent-yellow)', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
+                                        Forgot?
+                                    </button>
+                                )}
+                            </div>
+                            <input name="password" type="password" value={form.password} onChange={handleChange}
+                                placeholder="Min. 8 characters" required minLength={8} style={inputStyle} />
+                        </div>
+                    )}
 
                     {error && (
                         <div style={{
@@ -236,22 +286,40 @@ export default function AuthPage() {
                         </div>
                     )}
 
+                    {successMsg && (
+                        <div style={{
+                            background: 'rgba(0,180,100,0.1)', border: '1px solid rgba(0,180,100,0.3)',
+                            borderRadius: 8, padding: '10px 14px', color: '#00cc77', fontSize: 13,
+                        }}>
+                            {successMsg}
+                        </div>
+                    )}
+
                     <button type="submit" disabled={loading} className="btn-yellow yellow-glow"
                         style={{
                             width: '100%', padding: '12px 0', fontSize: 15, fontWeight: 700,
                             opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer', marginTop: 4,
                         }}>
-                        {loading ? '…' : tab === 'login' ? 'Log In' : 'Create Account'}
+                        {loading ? '…' : subState === 'forgot' ? 'Send Reset Link' : subState === 'reset' ? 'Update Password' : tab === 'login' ? 'Log In' : 'Create Account'}
                     </button>
+
+                    {subState !== 'default' && (
+                        <button type="button" onClick={() => { setSubState('default'); setError(''); setSuccessMsg(''); }}
+                            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12, marginTop: 4 }}>
+                            Back to Login
+                        </button>
+                    )}
                 </form>
 
-                <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, marginTop: 20 }}>
-                    {tab === 'login' ? "Don't have an account? " : 'Already have an account? '}
-                    <button onClick={() => setTab(tab === 'login' ? 'register' : 'login')}
-                        style={{ background: 'none', border: 'none', color: 'var(--accent-yellow)', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>
-                        {tab === 'login' ? 'Sign up' : 'Log in'}
-                    </button>
-                </p>
+                {subState === 'default' && (
+                    <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, marginTop: 20 }}>
+                        {tab === 'login' ? "Don't have an account? " : 'Already have an account? '}
+                        <button onClick={() => setTab(tab === 'login' ? 'register' : 'login')}
+                            style={{ background: 'none', border: 'none', color: 'var(--accent-yellow)', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>
+                            {tab === 'login' ? 'Sign up' : 'Log in'}
+                        </button>
+                    </p>
+                )}
             </div>
         </div>
     );
