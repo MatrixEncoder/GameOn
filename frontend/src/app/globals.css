@@ -1,0 +1,265 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #111114;
+  --bg-surface: #1a1a1f;
+  --bg-card: #222228;
+  --bg-input: #2a2a32;
+  --accent-yellow: #f5d000;
+  --accent-yellow-hover: #ffd700;
+  --text-primary: #f0f0f2;
+  --text-secondary: #9898a8;
+  --text-muted: #5a5a70;
+  --border: #2e2e38;
+  --green-online: #22c55e;
+  --red-heart: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444455;
+}
+
+/* Smooth transitions everywhere */
+* {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Utility classes */
+.bg-primary {
+  background: var(--bg-primary);
+}
+
+.bg-surface {
+  background: var(--bg-surface);
+}
+
+.bg-card {
+  background: var(--bg-card);
+}
+
+.bg-input {
+  background: var(--bg-input);
+}
+
+.text-primary {
+  color: var(--text-primary);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.border-default {
+  border-color: var(--border);
+}
+
+.btn-yellow {
+  background: var(--accent-yellow);
+  color: #111;
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 6px 18px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-yellow:hover {
+  background: var(--accent-yellow-hover);
+  transform: scale(1.03);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 6px 18px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+
+.btn-outline:hover {
+  border-color: #555;
+  color: var(--text-primary);
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.card {
+  background: var(--bg-surface);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.card-dark {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.avatar-sq {
+  border-radius: 14px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.tag {
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.tag:hover {
+  color: var(--text-primary);
+  border-color: #555;
+}
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+/* Pulse dot for online status */
+@keyframes pulseDot {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.4);
+    opacity: 0.7;
+  }
+}
+
+.pulse-dot {
+  animation: pulseDot 2s infinite;
+}
+
+/* Cinematic glow for accent elements */
+.yellow-glow {
+  box-shadow: 0 0 16px 2px rgba(245, 208, 0, 0.25);
+}
+
+/* Hover lift for cards */
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* Story ring */
+.story-ring {
+  border: 2.5px solid var(--accent-yellow);
+  border-radius: 50%;
+  padding: 2px;
+}
+
+/* Thin separator */
+.sep {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+/* Pulse keyframe for infinite scroll loading dots */
+@keyframes pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+
+  50% {
+    transform: scale(1.4);
+    opacity: 1;
+  }
+}

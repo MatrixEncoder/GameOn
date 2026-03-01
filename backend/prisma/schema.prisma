@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  karma        Int       @default(0)
+  isBanned     Boolean   @default(false) @map("is_banned")
+  isAdmin      Boolean   @default(false) @map("is_admin")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  posts    Post[]
+  comments Comment[]
+  votes    Vote[]
+
+  @@index([username])
+  @@map("users")
+}
+
+model Game {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  description String
+  iconUrl     String?  @map("icon_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  posts Post[]
+
+  @@index([slug])
+  @@map("games")
+}
+
+model Post {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  gameId    String   @map("game_id")
+  title     String
+  content   String
+  score     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game     Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  votes    Vote[]
+
+  @@index([score])
+  @@index([createdAt])
+  @@index([gameId])
+  @@index([userId])
+  @@map("posts")
+}
+
+model Comment {
+  id              String   @id @default(uuid())
+  postId          String   @map("post_id")
+  userId          String   @map("user_id")
+  parentCommentId String?  @map("parent_comment_id")
+  content         String
+  score           Int      @default(0)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  post          Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentComment Comment?  @relation("CommentToComment", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  childComments Comment[] @relation("CommentToComment")
+  votes         Vote[]
+
+  @@index([postId])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([parentCommentId])
+  @@map("comments")
+}
+
+model Vote {
+  id        String @id @default(uuid())
+  userId    String @map("user_id")
+  postId    String? @map("post_id")
+  commentId String? @map("comment_id")
+  voteType  Int    @map("vote_type")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post    Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@unique([userId, commentId])
+  @@map("votes")
+}
