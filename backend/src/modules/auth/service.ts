@@ -12,6 +12,7 @@ export class AuthService {
             where: {
                 OR: [{ email: data.email }, { username: data.username }],
             },
+            select: { id: true, email: true, username: true },
         });
 
         if (existingUser) {
@@ -39,6 +40,7 @@ export class AuthService {
     async login(data: LoginDto) {
         const user = await prisma.user.findUnique({
             where: { email: data.email },
+            select: { id: true, email: true, username: true, passwordHash: true, isBanned: true, isAdmin: true, createdAt: true },
         });
 
         if (!user) {
@@ -93,11 +95,14 @@ export class AuthService {
             displayName = info.name.slice(0, 20);
         }
 
-        let user = await prisma.user.findUnique({ where: { email } });
+        let user = await prisma.user.findUnique({
+            where: { email },
+            select: { id: true, email: true, username: true, isBanned: true },
+        });
 
         if (!user) {
             let username = displayName.replace(/[^a-zA-Z0-9_]/g, '_');
-            const taken = await prisma.user.findUnique({ where: { username } });
+            const taken = await prisma.user.findUnique({ where: { username }, select: { id: true } });
             if (taken) username = `${username}_${randomBytes(3).toString('hex')}`;
 
             user = await prisma.user.create({
@@ -106,6 +111,7 @@ export class AuthService {
                     username,
                     passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 12),
                 },
+                select: { id: true, email: true, username: true, isBanned: true },
             });
         }
 
@@ -119,7 +125,10 @@ export class AuthService {
     }
 
     async forgotPassword(email: string) {
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await prisma.user.findUnique({
+            where: { email },
+            select: { id: true, email: true },
+        });
         if (!user) {
             // Security: don't reveal if user exists
             return { message: 'If an account exists with that email, a reset link will be sent.' };
@@ -128,7 +137,7 @@ export class AuthService {
         const token = randomBytes(32).toString('hex');
         const expires = new Date(Date.now() + 3600000); // 1 hour
 
-        await prisma.user.update({
+        await (prisma.user.update as any)({
             where: { id: user.id },
             data: {
                 resetPasswordToken: token,
@@ -142,11 +151,12 @@ export class AuthService {
     }
 
     async resetPassword(token: string, newPassword: string) {
-        const user = await prisma.user.findFirst({
+        const user = await (prisma.user.findFirst as any)({
             where: {
                 resetPasswordToken: token,
                 resetPasswordExpires: { gt: new Date() },
             },
+            select: { id: true },
         });
 
         if (!user) {
@@ -155,7 +165,7 @@ export class AuthService {
 
         const passwordHash = await bcrypt.hash(newPassword, 12);
 
-        await prisma.user.update({
+        await (prisma.user.update as any)({
             where: { id: user.id },
             data: {
                 passwordHash,
