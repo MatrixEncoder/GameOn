@@ -11,7 +11,7 @@ interface CommentNode {
     content: string;
     score: number;
     createdAt: Date;
-    user: { id: string; username: string };
+    user: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
     userVote: number | null;
     children: CommentNode[];
     depth: number;
@@ -26,7 +26,7 @@ export class CommentsService {
             where: { postId },
             orderBy: sort === 'new' ? { createdAt: 'desc' } : { score: 'desc' },
             include: {
-                user: { select: { id: true, username: true } },
+                user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
                 ...(userId
                     ? { votes: { where: { userId }, select: { voteType: true } } }
                     : {}),
@@ -66,7 +66,7 @@ export class CommentsService {
 
         // Sort children recursively
         const sortChildren = (nodes: CommentNode[]) => {
-            nodes.sort((a, b) =>
+            nodes.sort((a: any, b: any) =>
                 sort === 'new'
                     ? b.createdAt.getTime() - a.createdAt.getTime()
                     : b.score - a.score
@@ -100,7 +100,7 @@ export class CommentsService {
                 parentCommentId: data.parentCommentId ?? null,
             },
             include: {
-                user: { select: { id: true, username: true } },
+                user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
             },
         });
 
@@ -116,7 +116,7 @@ export class CommentsService {
             where: { id },
             data: { content: filterProfanity(data.content) },
             include: {
-                user: { select: { id: true, username: true } },
+                user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
             },
         });
 

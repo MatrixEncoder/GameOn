@@ -10,8 +10,10 @@ datasource db {
 model User {
   id           String    @id @default(uuid())
   username     String    @unique
+  displayName  String?   @map("display_name")
   email        String    @unique
   passwordHash String    @map("password_hash")
+  avatarUrl    String?   @map("avatar_url")
   karma        Int       @default(0)
   isBanned     Boolean   @default(false) @map("is_banned")
   isAdmin      Boolean   @default(false) @map("is_admin")
@@ -47,6 +49,7 @@ model Post {
   gameId    String   @map("game_id")
   title     String
   content   String
+  image     String?  @map("image")
   score     Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
 

@@ -35,7 +35,7 @@ export class PostsService {
             take: limit + 1,
             ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
             include: {
-                user: { select: { id: true, username: true } },
+                user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
                 game: { select: { id: true, slug: true, name: true } },
                 _count: { select: { comments: true } },
                 ...(userId
@@ -48,7 +48,7 @@ export class PostsService {
         const results = hasMore ? posts.slice(0, -1) : posts;
 
         if (sort === 'hot') {
-            results.sort((a, b) => {
+            results.sort((a: any, b: any) => {
                 const now = Date.now();
                 const hoursA = (now - a.createdAt.getTime()) / (1000 * 60 * 60);
                 const hoursB = (now - b.createdAt.getTime()) / (1000 * 60 * 60);
@@ -88,7 +88,7 @@ export class PostsService {
             take: limit + 1,
             ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
             include: {
-                user: { select: { id: true, username: true } },
+                user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
                 game: { select: { id: true, slug: true, name: true } },
                 _count: { select: { comments: true } },
                 ...(userId
@@ -101,7 +101,7 @@ export class PostsService {
         const results = hasMore ? posts.slice(0, -1) : posts;
 
         if (sort === 'hot') {
-            results.sort((a, b) => {
+            results.sort((a: any, b: any) => {
                 const now = Date.now();
                 const hoursA = (now - a.createdAt.getTime()) / (1000 * 60 * 60);
                 const hoursB = (now - b.createdAt.getTime()) / (1000 * 60 * 60);
@@ -125,7 +125,7 @@ export class PostsService {
         const post = await prisma.post.findUnique({
             where: { id },
             include: {
-                user: { select: { id: true, username: true } },
+                user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
                 game: { select: { id: true, slug: true, name: true } },
                 _count: { select: { comments: true } },
                 ...(userId
@@ -151,11 +151,12 @@ export class PostsService {
             data: {
                 title: filterProfanity(data.title),
                 content: filterProfanity(data.content),
+                image: data.image,
                 userId,
                 gameId: game.id,
             },
             include: {
-                user: { select: { id: true, username: true } },
+                user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
                 game: { select: { id: true, slug: true, name: true } },
             },
         });
@@ -173,9 +174,10 @@ export class PostsService {
             data: {
                 ...(data.title ? { title: filterProfanity(data.title) } : {}),
                 ...(data.content ? { content: filterProfanity(data.content) } : {}),
+                ...(data.image !== undefined ? { image: data.image } : {}),
             },
             include: {
-                user: { select: { id: true, username: true } },
+                user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
                 game: { select: { id: true, slug: true, name: true } },
             },
         });

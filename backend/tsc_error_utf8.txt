@@ -1,0 +1,3 @@
+﻿src/modules/auth/service.ts(111,17): error TS2322: Type '{ email: string; username: string; displayName: string; }' is not assignable to type '(Without<UserCreateInput, UserUncheckedCreateInput> & UserUncheckedCreateInput) | (Without<...> & UserCreateInput)'.
+  Type '{ email: string; username: string; displayName: string; }' is not assignable to type 'Without<UserUncheckedCreateInput, UserCreateInput> & UserCreateInput'.
+    Property 'passwordHash' is missing in type '{ email: string; username: string; displayName: string; }' but required in type 'UserCreateInput'.

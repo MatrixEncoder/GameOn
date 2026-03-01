@@ -30,7 +30,7 @@ export class AuthService {
                 email: data.email,
                 passwordHash,
             },
-            select: { id: true, username: true, email: true, isAdmin: true, createdAt: true },
+            select: { id: true, username: true, email: true, isAdmin: true, createdAt: true, displayName: true, avatarUrl: true },
         });
 
         const token = this.generateToken(user.id);
@@ -40,7 +40,7 @@ export class AuthService {
     async login(data: LoginDto) {
         const user = await prisma.user.findUnique({
             where: { email: data.email },
-            select: { id: true, email: true, username: true, passwordHash: true, isBanned: true, isAdmin: true, createdAt: true },
+            select: { id: true, email: true, username: true, passwordHash: true, isBanned: true, isAdmin: true, createdAt: true, displayName: true, avatarUrl: true },
         });
 
         if (!user) {
@@ -64,6 +64,8 @@ export class AuthService {
                 email: user.email,
                 isAdmin: user.isAdmin,
                 createdAt: user.createdAt,
+                displayName: user.displayName,
+                avatarUrl: user.avatarUrl,
             },
             token,
         };
@@ -97,7 +99,7 @@ export class AuthService {
 
         let user = await prisma.user.findUnique({
             where: { email },
-            select: { id: true, email: true, username: true, isBanned: true },
+            select: { id: true, email: true, username: true, isBanned: true, displayName: true, avatarUrl: true },
         });
 
         if (!user) {
@@ -109,17 +111,25 @@ export class AuthService {
                 data: {
                     email,
                     username,
+                    displayName,
                     passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 12),
                 },
-                select: { id: true, email: true, username: true, isBanned: true },
+                select: { id: true, email: true, username: true, isBanned: true, displayName: true, avatarUrl: true },
             });
         }
 
+        if (!user) throw new AppError('Failed to create or find user', 500);
         if (user.isBanned) throw new AppError('Account is banned', 403);
 
         const token = this.generateToken(user.id);
         return {
-            user: { id: user.id, username: user.username, email: user.email },
+            user: {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                displayName: user.displayName,
+                avatarUrl: user.avatarUrl,
+            },
             token,
         };
     }
@@ -137,7 +147,7 @@ export class AuthService {
         const token = randomBytes(32).toString('hex');
         const expires = new Date(Date.now() + 3600000); // 1 hour
 
-        await (prisma.user.update as any)({
+        await prisma.user.update({
             where: { id: user.id },
             data: {
                 resetPasswordToken: token,
@@ -151,7 +161,7 @@ export class AuthService {
     }
 
     async resetPassword(token: string, newPassword: string) {
-        const user = await (prisma.user.findFirst as any)({
+        const user = await prisma.user.findFirst({
             where: {
                 resetPasswordToken: token,
                 resetPasswordExpires: { gt: new Date() },
@@ -165,7 +175,7 @@ export class AuthService {
 
         const passwordHash = await bcrypt.hash(newPassword, 12);
 
-        await (prisma.user.update as any)({
+        await prisma.user.update({
             where: { id: user.id },
             data: {
                 passwordHash,
@@ -180,7 +190,7 @@ export class AuthService {
     async getMe(userId: string) {
         const user = await prisma.user.findUnique({
             where: { id: userId },
-            select: { id: true, username: true, email: true, karma: true, isAdmin: true, createdAt: true },
+            select: { id: true, username: true, email: true, karma: true, isAdmin: true, createdAt: true, displayName: true, avatarUrl: true },
         });
 
         if (!user) {
