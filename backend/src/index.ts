@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import { config } from './config';
+import prisma from './config/db';
 import { errorHandler } from './middleware/error-handler';
 import { generalLimiter } from './middleware/rate-limit';
 
@@ -32,16 +33,30 @@ app.use('/api/votes', votesRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Health check
-app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check (includes DB connectivity)
+app.get('/api/health', async (_req, res) => {
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.json({ status: 'ok', db: 'connected', timestamp: new Date().toISOString() });
+    } catch (err: any) {
+        res.status(503).json({ status: 'error', db: 'disconnected', error: err.message });
+    }
 });
 
 // Error handler
 app.use(errorHandler);
 
-app.listen(config.port, () => {
+app.listen(config.port, async () => {
     console.log(`🎮 GameOn API running on port ${config.port}`);
+    console.log(`🌐 CORS origins: ${JSON.stringify(config.corsOrigin)}`);
+    console.log(`🗄️  DATABASE_URL set: ${!!process.env.DATABASE_URL}`);
+    try {
+        await prisma.$connect();
+        console.log('✅ Database connected successfully');
+    } catch (err: any) {
+        console.error('❌ Database connection FAILED:', err.message);
+        console.error('   → Make sure DATABASE_URL is set correctly in Render env vars');
+    }
 });
 
 export default app;
