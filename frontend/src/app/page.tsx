@@ -7,11 +7,10 @@ import RightSidebar from '../components/RightSidebar';
 
 export default function HomePage() {
     return (
-        <div style={{ background: 'var(--bg-primary)', height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ background: 'var(--bg-primary)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
             <Topbar />
-
-            {/* 3-column layout below topbar */}
             <div
+                className="main-layout"
                 style={{
                     display: 'flex',
                     gap: 16,
@@ -21,12 +20,19 @@ export default function HomePage() {
                     alignItems: 'flex-start',
                     flex: 1,
                     width: '100%',
-                    minHeight: 0, // allows flex children to scroll properly
+                    overflow: 'hidden',
+                    height: 'calc(100vh - 56px)',
                 }}
             >
-                <LeftSidebar />
-                <FeedColumn />
-                <RightSidebar />
+                <div className="sidebar-left" style={{ display: 'flex' }}>
+                    <LeftSidebar />
+                </div>
+                <div className="feed-column" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', height: '100%', minWidth: 0, paddingBottom: 20, gap: 14 }}>
+                    <FeedColumn />
+                </div>
+                <div className="sidebar-right" style={{ display: 'flex' }}>
+                    <RightSidebar />
+                </div>
             </div>
         </div>
     );

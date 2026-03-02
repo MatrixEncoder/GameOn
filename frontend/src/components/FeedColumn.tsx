@@ -332,18 +332,7 @@ export default function FeedColumn() {
     }
 
     return (
-        <div
-            style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 14,
-                overflowY: 'auto',
-                height: '100%',
-                paddingBottom: 20,
-                minWidth: 0,
-            }}
-        >
+        <>
             {/* ── Stories Row ─────────────────────────────────────────────── */}
             <div
                 className="card fade-in"
@@ -635,7 +624,7 @@ export default function FeedColumn() {
                                         setCommentText((prev) => ({ ...prev, [post.id]: '' }));
                                     }
                                 }}
-                                placeholder={user ? 'Write a comment and press Enter…' : 'Log in to comment…'}
+                                placeholder={user ? 'Write a comment…' : 'Log in to comment…'}
                                 style={{
                                     flex: 1,
                                     background: 'var(--bg-input)',
@@ -647,7 +636,28 @@ export default function FeedColumn() {
                                     fontSize: 13,
                                 }}
                             />
-                            <button className="icon-btn" title="Add Emoji"><SmileIcon /></button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    if (!commentText[post.id]?.trim()) return;
+                                    if (!user) { router.push('/auth'); return; }
+                                    try {
+                                        const newComment = await api.post<any>(`/api/posts/${post.id}/comments`, { content: commentText[post.id] });
+                                        setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, _count: { comments: p._count.comments + 1 } } : p));
+                                        setComments((prev) => ({ ...prev, [post.id]: [newComment, ...(prev[post.id] || [])] }));
+                                        setShowComments((prev) => ({ ...prev, [post.id]: true }));
+                                    } catch { /* ignore */ }
+                                    setCommentText((prev) => ({ ...prev, [post.id]: '' }));
+                                }}
+                                style={{
+                                    background: 'var(--accent-yellow)', border: 'none',
+                                    borderRadius: 8, padding: '8px 14px',
+                                    color: '#111', fontWeight: 700, fontSize: 12,
+                                    cursor: 'pointer', flexShrink: 0,
+                                }}
+                            >
+                                Send
+                            </button>
                         </div>
                     </div>
                 ))
@@ -666,6 +676,6 @@ export default function FeedColumn() {
                     <div ref={sentinelRef} style={{ height: 1 }} />
                 </>
             )}
-        </div>
+        </>
     );
 }
