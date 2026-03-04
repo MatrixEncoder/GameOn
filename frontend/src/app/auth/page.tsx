@@ -277,7 +277,7 @@ function AuthPageInner() {
                                     {subState === 'reset' ? 'New Password' : 'Password'}
                                 </label>
                                 {tab === 'login' && subState === 'default' && (
-                                    <button type="button" onClick={() => { setSubState('forgot'); setError(''); }}
+                                    <button type="button" onClick={() => router.push('/forgot-password')}
                                         style={{ background: 'none', border: 'none', color: 'var(--accent-yellow)', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
                                         Forgot?
                                     </button>

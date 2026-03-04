@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomInt } from 'crypto';
 import { Resend } from 'resend';
 import prisma from '../../config/db';
 import { config } from '../../config';
@@ -15,6 +15,43 @@ function getResend() {
     return new Resend(key);
 }
 
+// ── Brevo email helper ────────────────────────────────────────────────────────
+async function sendBrevoEmail(to: string, subject: string, html: string) {
+    const key = process.env.BREVO_API_KEY;
+    if (!key) {
+        console.warn('BREVO_API_KEY not set, skipping email send');
+        return;
+    }
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+            'api-key': key,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+        },
+        body: JSON.stringify({
+            sender: { name: 'GameOn', email: 'noreply@gameon.app' },
+            to: [{ email: to }],
+            subject,
+            htmlContent: html,
+        }),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('Brevo send failed:', err);
+    }
+}
+
+// ── Password validation ───────────────────────────────────────────────────────
+export function validatePasswordStrength(password: string): string | null {
+    if (password.length < 8) return 'Password must be at least 8 characters';
+    if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter';
+    if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter';
+    if (!/[0-9]/.test(password)) return 'Password must contain at least one number';
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) return 'Password must contain at least one special character';
+    return null;
+}
+
 export class AuthService {
     async signup(data: SignupDto) {
         const existingUser = await prisma.user.findFirst({
@@ -26,10 +63,13 @@ export class AuthService {
 
         if (existingUser) {
             if (existingUser.email === data.email) {
-                throw new AppError('Email already exists. Please log in or use Forgot Password.', 409);
+                throw new AppError('This email is already registered. Please log in or use Forgot Password.', 409);
             }
-            throw new AppError('Username already taken', 409);
+            throw new AppError('Username already taken. Please choose another.', 409);
         }
+
+        const pwError = validatePasswordStrength(data.password);
+        if (pwError) throw new AppError(pwError, 400);
 
         const passwordHash = await bcrypt.hash(data.password, 12);
 
@@ -53,7 +93,7 @@ export class AuthService {
         });
 
         if (!user) {
-            throw new AppError('Invalid credentials', 401);
+            throw new AppError('No account found with this email. Please sign up first.', 401);
         }
 
         if (user.isBanned) {
@@ -62,7 +102,7 @@ export class AuthService {
 
         const isValid = await bcrypt.compare(data.password, user.passwordHash);
         if (!isValid) {
-            throw new AppError('Invalid credentials', 401);
+            throw new AppError('Incorrect password. Please try again or use Forgot Password.', 401);
         }
 
         const token = this.generateToken(user.id);
@@ -80,7 +120,7 @@ export class AuthService {
         };
     }
 
-    // ── OAuth: verify provider token → find/create user → return JWT ─────────
+    // ── OAuth ─────────────────────────────────────────────────────────────────
     async oauthLogin(provider: 'google' | 'reddit', accessToken: string) {
         let email: string;
         let displayName: string;
@@ -143,49 +183,121 @@ export class AuthService {
         };
     }
 
-    async forgotPassword(email: string) {
+    // ── OTP-based password reset ──────────────────────────────────────────────
+    async sendOtp(email: string) {
         const user = await prisma.user.findUnique({
             where: { email },
-            select: { id: true, email: true },
+            select: { id: true, email: true, username: true },
         });
+
+        // Always respond the same to avoid leaking whether the email exists
         if (!user) {
-            // Security: don't reveal if user exists
-            return { message: 'If an account exists with that email, a reset link will be sent.' };
+            return { message: 'If that email is registered, an OTP has been sent.' };
         }
 
-        const token = randomBytes(32).toString('hex');
-        const expires = new Date(Date.now() + 3600000); // 1 hour
+        const otp = String(randomInt(100000, 999999)); // 6 digits
+        const otpHash = await bcrypt.hash(otp, 10);
+        const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
         await prisma.user.update({
             where: { id: user.id },
-            data: {
-                resetPasswordToken: token,
-                resetPasswordExpires: expires,
-            },
+            data: { otpCode: otpHash, otpExpires },
         });
 
-        const resetUrl = `${APP_URL}/auth?token=${token}&action=reset`;
+        const html = `
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#111;color:#eee;border-radius:12px">
+                <h2 style="color:#f5c518;margin-top:0">🎮 GameOn — Password Reset OTP</h2>
+                <p>Hi <strong>${user.username}</strong>,</p>
+                <p>Your one-time password reset code is:</p>
+                <div style="text-align:center;margin:28px 0">
+                    <span style="background:#f5c518;color:#111;font-size:36px;font-weight:900;letter-spacing:12px;padding:12px 24px;border-radius:10px;display:inline-block">${otp}</span>
+                </div>
+                <p style="color:#888;font-size:13px">This code expires in <strong>10 minutes</strong>. If you didn't request this, ignore this email.</p>
+            </div>
+        `;
 
+        await sendBrevoEmail(email, 'Your GameOn Password Reset Code', html);
+
+        return { message: 'If that email is registered, an OTP has been sent.' };
+    }
+
+    async verifyOtp(email: string, otp: string) {
+        const user = await prisma.user.findUnique({
+            where: { email },
+            select: { id: true, otpCode: true, otpExpires: true },
+        });
+
+        if (!user || !user.otpCode || !user.otpExpires) {
+            throw new AppError('Invalid or expired OTP', 400);
+        }
+
+        if (user.otpExpires < new Date()) {
+            throw new AppError('OTP has expired. Please request a new one.', 400);
+        }
+
+        const valid = await bcrypt.compare(otp, user.otpCode);
+        if (!valid) {
+            throw new AppError('Incorrect OTP. Please check and try again.', 400);
+        }
+
+        // Clear OTP after successful verify
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { otpCode: null, otpExpires: null },
+        });
+
+        // Return a short-lived reset token
+        const resetToken = jwt.sign({ userId: user.id, purpose: 'password-reset' }, config.jwtSecret, { expiresIn: '15m' });
+        return { resetToken };
+    }
+
+    async resetPasswordWithOtp(resetToken: string, newPassword: string) {
+        let payload: { userId: string; purpose: string };
+        try {
+            payload = jwt.verify(resetToken, config.jwtSecret) as { userId: string; purpose: string };
+        } catch {
+            throw new AppError('Reset session expired. Please start again.', 400);
+        }
+
+        if (payload.purpose !== 'password-reset') {
+            throw new AppError('Invalid reset token', 400);
+        }
+
+        const pwError = validatePasswordStrength(newPassword);
+        if (pwError) throw new AppError(pwError, 400);
+
+        const passwordHash = await bcrypt.hash(newPassword, 12);
+        await prisma.user.update({
+            where: { id: payload.userId },
+            data: { passwordHash, resetPasswordToken: null, resetPasswordExpires: null },
+        });
+
+        return { message: 'Password has been reset successfully. You can now log in.' };
+    }
+
+    // ── Legacy reset (kept for compatibility) ─────────────────────────────────
+    async forgotPassword(email: string) {
+        const user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true } });
+        if (!user) return { message: 'If an account exists with that email, a reset link will be sent.' };
+
+        const token = randomBytes(32).toString('hex');
+        const expires = new Date(Date.now() + 3600000);
+
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { resetPasswordToken: token, resetPasswordExpires: expires },
+        });
+
+        const resetUrl = `${APP_URL}/forgot-password?token=${token}&action=reset`;
         try {
             await getResend().emails.send({
                 from: 'GameOn <onboarding@resend.dev>',
                 to: email,
                 subject: 'Reset your GameOn password',
-                html: `
-                    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#111;color:#eee;border-radius:12px">
-                        <h2 style="color:#f5c518;margin-top:0">🎮 GameOn — Password Reset</h2>
-                        <p>We received a request to reset your password. Click the button below to choose a new one.</p>
-                        <p style="text-align:center;margin:32px 0">
-                            <a href="${resetUrl}" style="background:#f5c518;color:#111;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px">Reset Password</a>
-                        </p>
-                        <p style="color:#888;font-size:12px">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
-                        <p style="color:#888;font-size:12px">Or copy this link: <a href="${resetUrl}" style="color:#f5c518">${resetUrl}</a></p>
-                    </div>
-                `,
+                html: `<a href="${resetUrl}">Reset Password</a>`,
             });
-        } catch (emailErr) {
-            console.error('Failed to send reset email:', emailErr);
-            // Don't throw — still return success to avoid leaking user existence
+        } catch (e) {
+            console.error('Resend failed:', e);
         }
 
         return { message: 'If an account exists with that email, a reset link will be sent.' };
@@ -193,28 +305,19 @@ export class AuthService {
 
     async resetPassword(token: string, newPassword: string) {
         const user = await prisma.user.findFirst({
-            where: {
-                resetPasswordToken: token,
-                resetPasswordExpires: { gt: new Date() },
-            },
+            where: { resetPasswordToken: token, resetPasswordExpires: { gt: new Date() } },
             select: { id: true },
         });
+        if (!user) throw new AppError('Invalid or expired reset token', 400);
 
-        if (!user) {
-            throw new AppError('Invalid or expired reset token', 400);
-        }
+        const pwError = validatePasswordStrength(newPassword);
+        if (pwError) throw new AppError(pwError, 400);
 
         const passwordHash = await bcrypt.hash(newPassword, 12);
-
         await prisma.user.update({
             where: { id: user.id },
-            data: {
-                passwordHash,
-                resetPasswordToken: null,
-                resetPasswordExpires: null,
-            },
+            data: { passwordHash, resetPasswordToken: null, resetPasswordExpires: null },
         });
-
         return { message: 'Password has been reset successfully' };
     }
 
@@ -223,11 +326,7 @@ export class AuthService {
             where: { id: userId },
             select: { id: true, username: true, email: true, karma: true, isAdmin: true, createdAt: true, displayName: true, avatarUrl: true },
         });
-
-        if (!user) {
-            throw new AppError('User not found', 404);
-        }
-
+        if (!user) throw new AppError('User not found', 404);
         return user;
     }
 
